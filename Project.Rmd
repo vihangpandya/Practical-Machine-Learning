@@ -1,0 +1,126 @@
+---
+title: 'Practical Machine Learning Project - Quality of Personal Acitivity'
+author: "Vihang Pandya"
+date: "May 22, 2016"
+output: html_document
+---
+```{r,echo = FALSE}
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(randomForest))
+```
+
+###Executive Summary
+Sensors in wearbale devices are used to collect data with the objective to determine how well the personal activity is performed. Data from 6 participants was collected by from accelerometers on the belt, forearm, arm, and dumbell. The 6 participants performed barbell lifts correctly and incorrectly in 5 different ways.
+
+###Experimental Set up
+Sensor data was already partitioned into testing and training data. The "classe" variable in the training set is the outcome. We were allowed to use any predictors in the training set to build the outcome variable. Outcome could be any of the 5 values:
+
+* Class A: Performed exactly according to the specification
+* Class B: Throwing the elbows to the front
+* Class C: Lifting the dumbbell only halfway
+* Class D: Lowering the dumbbell only halfway
+* Class E: Throwing the hips to the front (Class E)
+
+###Exploratory Data Analysis
+Training Data was a data frame with 19622 observations of  160 variables. Testing data was a data frame with  20 observations of  160 variables. Both included columns that had missing values and blanks. Finally, identified columns that were not required for analysis. Example timestamp
+```{r}
+fn <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fn, "pml-training.csv")
+trndata <- read.csv("pml-training.csv")
+```
+
+###Cleaning Data
+
+Remove the columns with NA; Attaches FALSE if col has no NA and 
+TRUE if column has NA
+```{r}
+nacol  <- apply(trndata, 2, anyNA)
+```
+Eliminate the columns that wer marked as TRUE.
+```{r}
+trndata <- trndata[, !names(trndata) %in% names(trndata)[nacol]]
+```
+Remove columns that have blanks; sets TRUE to columns which have blanks
+```{r}
+blnkcol <- apply(trndata, 2, function(x) sum(x=="")!=0)
+trndata <- trndata[, !names(trndata) %in% names(trndata)[blnkcol]]
+```
+Remove columns that are not required for analysis
+```{r}
+trndata$raw_timestamp_part_1 <- NULL
+trndata$raw_timestamp_part_2 <- NULL
+trndata$cvtd_timestamp <- NULL
+trndata$new_window <- NULL
+trndata$num_window <- NULL
+trndata$X <- NULL
+```
+####After cleaning data, data frame includes 19622 observations of 54 variables
+
+###Create Machine Learning Algorithm
+####Training set that was provided is is large. Hence, decided to break it up into a validation set and testing set. Create validation data from training data. Split is 80/20.
+```{r}
+set.seed (0007)
+inTrain <- createDataPartition(y=trndata$classe,
+                               p=0.8, list=FALSE)
+train.trndata <- trndata[inTrain,]
+val.trndata <- trndata[-inTrain,]
+```
+####Random Forest was selected for building the algorithm since, it is most suitable for classification. Prediction was done on validation set. Accuracy indicated 1% sample error.
+
+```{r}
+obsvdresult <- val.trndata$classe
+val.trndata <- val.trndata[1:53]
+crsvalFitRf <- randomForest(classe ~ ., data = train.trndata, ntree = 10)
+crsvalFitPred <- predict (crsvalFitRf, newdata = val.trndata)
+accuracy <- sum(obsvdresult == crsvalFitPred)/length(obsvdresult)
+```
+accuracy
+
+###Cross Validation
+####Goal to repeat and average the estimated errors. Use 60/40 split, ntree = 30; Build and simualte model 5 times.
+```{r}
+for (i in 1:5) {
+        inTrain <- createDataPartition(y=trndata$classe,
+                                       p=0.6, list=FALSE)
+        train.trndata <- trndata[inTrain,]
+        val.trndata <- trndata[-inTrain,]
+        obsvdresult <- val.trndata$classe
+        val.trndata <- val.trndata[1:53]
+        crsvalFitRf <- randomForest(classe ~ ., 
+                                    data = train.trndata, ntree = 30)
+        crsvalFitPred <- predict (crsvalFitRf, newdata = val.trndata)
+        x <- sum(obsvdresult == crsvalFitPred)/length(obsvdresult)
+        accuracy[i] <- x
+}
+```
+accuracy
+
+####Average Accuracy of the prediction was from 5 iterations was 99% and hence, this model is a good predictor.
+
+###Prediction on actual test set.
+####Cleaning testing Data
+```{r}
+fn <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fn, "pml-testing.csv")
+tstdata <- read.csv("pml-testing.csv")
+nacol  <- apply(tstdata, 2, anyNA)
+tstdata <- tstdata[, !names(tstdata) %in% names(tstdata)[nacol]]
+blnkcol <- apply(tstdata, 2, function(x) sum(x=="")!=0)
+tstdata <- tstdata[, !names(tstdata) %in% names(tstdata)[blnkcol]]
+tstdata$raw_timestamp_part_1 <- NULL
+tstdata$raw_timestamp_part_2 <- NULL
+tstdata$cvtd_timestamp <- NULL
+tstdata$new_window <- NULL
+tstdata$num_window <- NULL
+tstdata$X <- NULL
+```
+Remove the problem_id column from the testing set.
+```{r}
+tstdata <- tstdata[1:53]
+```
+
+####Apply machine learning algorithm
+```{r}
+modelFitPred <- predict (crsvalFitRf, newdata = tstdata)
+```
+modelFitPred
